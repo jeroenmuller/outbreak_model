@@ -110,7 +110,8 @@ def geometric_graph_degree(pos, r, degree, connect_isolated = True):
         # Add edges to the nearest neighbour
         connected_kd = cKDTree(pos[~is_isolated])
         nearest = connected_kd.query(pos[is_isolated])[1]
-        isolated_links = np.array([isolated_nodes, nearest]).T
+        nearest_idx = np.arange(len(pos))[~is_isolated]
+        isolated_links = np.array([isolated_nodes, nearest_idx[nearest]]).T
         selected_pairs = np.concatenate([
             selected_pairs[:len(selected_pairs) - len(isolated_links)], 
             isolated_links

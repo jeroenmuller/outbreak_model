@@ -16,7 +16,7 @@ class OutbreakModel:
         self.graph = network.g
         self.num_regions = config['regions'][0] * config['regions'][1] 
         self.region_index = pd.RangeIndex(self.num_regions, name='region')
-        self.node_index = pd.RangeIndex(len(self.graph), name='node')
+        self.node_index = pd.RangeIndex(network.pos.shape[0], name='node')
         self.edge_index = pd.RangeIndex(self.graph.size() * 2, name='edge')
         self.state_index = pd.Index([0, 1, 2, 3], name='state')
         
@@ -108,14 +108,22 @@ class OutbreakModel:
         transition_candidates = self.nodes[self.nodes.state == initial].index
         p = np.random.uniform(size = len(transition_candidates))
         self.nodes.loc[transition_candidates[p < rate], 'new_state'] = final
+    
+    def time_transition(self, initial, final, time):
+        transition_candidates = self.nodes[
+        (self.nodes.state == initial) & (self.nodes.counter > time)].index
+        self.nodes.loc[transition_candidates, 'new_state'] = final
+
     '''
     Perform one step of the transition
     New 
     '''
     def transition_step(self):
         # Set new states to old states
+        self.nodes.counter += 1
         self.nodes.new_state = self.nodes.state
         
+
         # susceptible -> exposed
         # Select transmission edges
         source_state = pd.merge(self.edges, self.nodes, left_on='source', right_index=True).state
@@ -137,24 +145,34 @@ class OutbreakModel:
     
         # Select the transmissions
         p = np.random.uniform(size = len(active_edges))
-        infection_rate = self.config['infection_rate']
+        r = self.config['transmission_coefficient']
+        deg = self.network.config['degree']
+        infected_time = self.config['infected_time']
+        infection_rate = r / (deg * infected_time)
         transmissions = active_edges[p < active_edges.factor * active_edges.weight * infection_rate]
+        
         #print("%d cases infected %d out of %d" % (np.sum(self.nodes.state == 2), len(transmissions), len(active_edges)))
-        self.nodes.loc[transmissions.target, 'new_state'] = 2
-        self.nodes.loc[transmissions.target, 'state'] = 2
+        self.nodes.loc[transmissions.target, 'new_state'] = 1
         
         # exposed -> infected
-        exposed_transition_rate = self.config['exposed_transition_rate']
-        self.rate_transition(1, 2, exposed_transition_rate)
+        exposed_transition_time = self.config['exposed_time']
+        #self.rate_transition(1, 2, exposed_transition_rate)
+        self.time_transition(1, 2, exposed_transition_time)
         
         # infected -> recovered
-        recovery_rate = self.config['recovery_rate']
-        self.rate_transition(2, 3, recovery_rate)
+        recovery_time = self.config['infected_time']
+        #self.rate_transition(2, 3, recovery_rate)
+        self.time_transition(2, 3, recovery_time)
         
         # recovered -> susceptible
-        deimmunization_rate = self.config['deimmunization_rate']
-        self.rate_transition(3, 0, deimmunization_rate)
+        #deimmunization_rate = self.config['deimmunization_rate']
+        #self.rate_transition(3, 0, deimmunization_rate)
+        immune_time = self.config['immune_time']
+        self.rate_transition(3, 0, immune_time)
         
+        # Reset counter
+        self.nodes.loc[self.nodes.state != self.nodes.new_state, 'counter'] = 0
+
         # Set the state to the new state
         self.nodes.state = self.nodes.new_state
         self.t += 1
@@ -237,9 +255,13 @@ class OutbreakModel:
         self.write_state_output(0)
 
     def initialize_states(self):
-        radius = self.config.get('infection_radius')
+        radius = self.config.get('outbreak_start_radius')
         if not radius is None:
-            self.nodes.loc[self.nodes.r < radius, 'state'] = 1
+            initial = (self.nodes.r < radius)
+            self.nodes.loc[initial, 'state'] = 1
+            random = np.random.randint(self.config['exposed_time'], size=len(self.nodes))
+            self.nodes.counter.mask(initial, random, inplace=True)
+
 
     '''
     Run the diffusion for n steps. 
