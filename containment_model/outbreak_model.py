@@ -69,7 +69,7 @@ class OutbreakModel:
         
         # Transmission suppression
         self.suppression = pd.DataFrame(
-            columns=['factor'],
+            columns=['factor', 'countdown'],
             index = pd.MultiIndex.from_product(
                 [self.region_index, self.region_index],
                 names = ['source_region', 'region']
@@ -94,13 +94,22 @@ class OutbreakModel:
         self.state_counts.fraction = self.state_counts.total / self.regions.total_nodes
     
     def set_suppression(self):
-        lockdown_threshold = self.config['infection_rate']
+        lockdown_threshold = self.config['lockdown_threshold']
         suppression = self.config['lockdown_suppression']
+        lockdown_time = self.config['lockdown_time']
         # Update suppressions
-        lockdown = self.state_counts.xs(2, level='state')\
+        lockdown_trigger = self.state_counts.xs(2, level='state')\
             .fraction.gt(lockdown_threshold)\
             .reindex(self.suppression.index, level='region')
+        print('Lockdown trigger in %d regions' % sum(lockdown_trigger))
+        #print(self.suppression.loc[lockdown_trigger, 'countdown'])
+        self.suppression.loc[self.suppression.countdown > 0, 'countdown'] -= 1
+        self.suppression.loc[lockdown_trigger, 'countdown'] = lockdown_time
+        lockdown = (self.suppression.countdown != 0)
+        print('Lockdown in %d regions' % sum(lockdown))
+        #print(self.suppression)
         self.suppression.factor = 1.0 - suppression * lockdown
+
         # TODO: move this to a separate class and implement more complex
         # responses
     
@@ -240,6 +249,8 @@ class OutbreakModel:
     def reset(self, size = 1):
         self.t = 0
         self.output_size = size
+        self.suppression.factor = 1.0
+        self.suppression.countdown = 0
         self.state_history = pd.DataFrame(
             0, 
             index = self.state_history_index(size), 

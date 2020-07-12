@@ -100,6 +100,7 @@ def plot_transmissions(model, t = None):
 
     transmission_graph = model.network.g.edge_subgraph(transmission_edges)
     nx.drawing.draw_networkx_edges(transmission_graph, pos=model.network.posdict, alpha=1, width=2, edge_color='r')
-    print(list(transmission_edges))
 
-    #new_infected_nodes = nodes[nodes.state == i]
+def plot_lockdown():
+    pass
+    

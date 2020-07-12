@@ -33,8 +33,9 @@ class InteractionNetwork:
     def density(self, centers, X):
         min_distance = np.min(cdist(self.centers, X), axis=0)
         cluster_radius = self.config['cluster_radius']
+        cluster_sharpness = self.config['cluster_sharpness']
         background_density = self.config['background_density']
-        return distance_kernel(min_distance, cluster_radius, p=2) + background_density
+        return distance_kernel(min_distance, cluster_radius, p=cluster_sharpness) + background_density
         #return np.exp(-min_distance / cluster_radius) + background_density
 
     def travel_kernel(self, X):
